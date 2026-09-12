@@ -17,7 +17,7 @@
   *{box-sizing:border-box;margin:0;padding:0}
   body{background:var(--bg);color:var(--text);
        font-family:"Space Grotesk",system-ui,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:1500px;margin:0 auto;padding:0 clamp(16px,3vw,40px)}
+  .wrap{max-width:1320px;margin:0 auto;padding:0 clamp(20px,5vw,64px)}
   svg{display:block}
 
   header{padding:44px 0 6px}
@@ -30,7 +30,7 @@
   .tab:hover{color:var(--text);border-color:#34344c}
   .tab.on{background:var(--pp);border-color:var(--pp);color:#fff;font-weight:600;box-shadow:0 8px 22px var(--ppglow)}
 
-  .tagline{text-align:right;font-style:italic;font-size:19px;font-weight:500;color:#e7e8f0;opacity:.85;margin:16px 4px}
+  .tagline{text-align:right;font-style:italic;font-size:14px;font-weight:500;color:#e7e8f0;opacity:.7;margin:14px 4px}
 
   /* podium — centered, stacked */
   .podium{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:30px}
@@ -59,7 +59,7 @@
     background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 18px;transition:.15s}
   .row:hover{background:var(--hover)}
   .row.you{background:linear-gradient(90deg,rgba(139,92,246,.18),rgba(139,92,246,.04));border-color:var(--pp)}
-  .rnum{width:30px;height:30px;border-radius:9px;background:#22222f;display:grid;place-items:center;
+  .rnum{width:30px;height:30px;border-radius:50%;background:#22222f;display:grid;place-items:center;
     font-weight:600;font-size:13.5px;color:var(--dim)}
   .row.r1 .rnum{background:var(--gold);color:#231a00}
   .row.r2 .rnum{background:var(--silver);color:#1a1c26}
@@ -85,7 +85,7 @@
     header{padding:30px 0 4px}
     h1{font-size:26px}
     .subtitle{font-size:14px}
-    .tagline{text-align:left;font-size:16px;margin:14px 2px}
+    .tagline{text-align:left;font-size:13px;margin:12px 2px}
     .podium{grid-template-columns:1fr;gap:12px}
     .podium .pcard.third{grid-column:auto}
     .pcard{padding:22px 16px}
@@ -126,7 +126,7 @@
   <div class="rk-title" id="rkTitle"></div>
   <div class="rows" id="rows"></div>
 
-  <footer>WSB Agency · updated live · demo data</footer>
+  <footer>We So Back Agency</footer>
 </div>
 
 <script>
