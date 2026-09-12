@@ -1,0 +1,16 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Pretty URLs for the API
+[[redirects]]
+  from = "/api/leaderboard"
+  to = "/.netlify/functions/leaderboard"
+  status = 200
+[[redirects]]
+  from = "/api/interactions"
+  to = "/.netlify/functions/interactions"
+  status = 200
