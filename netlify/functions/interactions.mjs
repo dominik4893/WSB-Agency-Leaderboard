@@ -66,7 +66,7 @@ export const handler = async (event) => {
     if (TICKETY_CATEGORY_ID && body.channel?.parent_id !== TICKETY_CATEGORY_ID) {
       return reply({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: { flags: 64, content: "❌ `/submit` funguje len v tvojom tickete (kategória TICKETY). Otvor ticket a pošli výsledok tam." },
+        data: { flags: 64, content: "❌ `/submit` funguje len v tvojom tickete. Otvor si tiket v #leaderboard-ticket a pošli výsledok tam." },
       });
     }
     const opts = Object.fromEntries((body.data.options || []).map((o) => [o.name, o.value]));
