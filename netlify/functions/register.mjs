@@ -10,7 +10,7 @@ const COMMANDS = [
     name: "submit",
     description: "Submit your earnings with a proof screenshot.",
     options: [
-      { name: "amount", description: "How much you earned (numbers only).", type: 10, required: true },   // NUMBER
+      { name: "amount", description: "How much you earned, e.g. 40 or 40,00 or 1.234,56", type: 3, required: true },   // STRING (we parse it)
       { name: "proof", description: "Screenshot proof.", type: 11, required: true },                        // ATTACHMENT
       { name: "count", description: "How many (sales/etc). Default 1.", type: 4, required: false },         // INTEGER
     ],

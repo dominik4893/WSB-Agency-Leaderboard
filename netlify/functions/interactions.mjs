@@ -17,7 +17,28 @@ function subStore() {
     : getStore("submissions");
 }
 
-const usd = (n) => "$" + Number(n || 0).toLocaleString("en-US");
+const usd = (n) => "$" + Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
+
+// Parse amounts the way people actually type them:
+//   "40"      -> 40      "40.00" -> 40      "40,00" -> 40 (EU decimal comma)
+//   "1,234.56"-> 1234.56 "1.234,56" -> 1234.56   "4,000" -> 4000
+function parseAmount(input) {
+  let s = String(input ?? "").trim().replace(/[^\d.,-]/g, "");
+  if (!s) return 0;
+  const hasComma = s.includes(","), hasDot = s.includes(".");
+  if (hasComma && hasDot) {
+    // the LAST separator is the decimal one
+    if (s.lastIndexOf(",") > s.lastIndexOf(".")) s = s.replace(/\./g, "").replace(",", ".");
+    else s = s.replace(/,/g, "");
+  } else if (hasComma) {
+    const parts = s.split(",");
+    // "40,00" -> decimal; "4,000" / "4,000,000" -> thousands
+    s = parts[parts.length - 1].length === 2 ? s.replace(/,/g, ".").replace(/\.(?=.*\.)/g, "")
+                                             : s.replace(/,/g, "");
+  }
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+}
 const reply = (obj, status = 200) => ({
   statusCode: status,
   headers: { "content-type": "application/json" },
@@ -49,7 +70,7 @@ export const handler = async (event) => {
       });
     }
     const opts = Object.fromEntries((body.data.options || []).map((o) => [o.name, o.value]));
-    const amount = Number(opts.amount) || 0;
+    const amount = parseAmount(opts.amount);
     const metric = Number(opts.count) || 1;
     const proofUrl = opts.proof ? body.data.resolved?.attachments?.[opts.proof]?.url : null;
     const user = body.member?.user || body.user;
@@ -59,6 +80,7 @@ export const handler = async (event) => {
       id, userId: user.id,
       username: body.member?.nick || user.global_name || user.username,
       amount, metric, proofUrl, status: "pending", created: new Date().toISOString(),
+      channelId: body.channel_id,
     });
 
     // post to the private approvals channel with Approve/Reject buttons
@@ -94,7 +116,7 @@ export const handler = async (event) => {
     });
   }
 
-  // ---- Approve / Reject button ----
+  // ---- Approve / Reject buttons ----
   if (body.type === InteractionType.MESSAGE_COMPONENT) {
     const [action, id] = (body.data.custom_id || "").split(":");
     const roles = body.member?.roles || [];
@@ -102,18 +124,66 @@ export const handler = async (event) => {
     if (!isStaff)
       return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "Staff only." } });
 
+    if (action === "reject") {
+      // ask the staffer for a reason via a popup
+      return reply({
+        type: InteractionResponseType.MODAL,
+        data: {
+          custom_id: `rejectmodal:${id}`,
+          title: "Dôvod zamietnutia",
+          components: [{ type: 1, components: [
+            { type: 4, custom_id: "reason", label: "Prečo zamietaš tento výsledok?", style: 2, required: true, max_length: 400 },
+          ]}],
+        },
+      });
+    }
+
+    // approve
     const rec = await store.get(id, { type: "json" });
     if (!rec)
       return reply({ type: InteractionResponseType.UPDATE_MESSAGE, data: { content: "Submission not found.", embeds: [], components: [] } });
+    rec.status = "approved";
+    await store.setJSON(id, rec);
+    const who = body.member?.user?.username || "staff";
+    if (BOT_TOKEN && rec.channelId) {
+      await fetch(`https://discord.com/api/v10/channels/${rec.channelId}/messages`, {
+        method: "POST", headers: { authorization: `Bot ${BOT_TOKEN}`, "content-type": "application/json" },
+        body: JSON.stringify({ content: `✅ <@${rec.userId}> tvoj výsledok **${usd(rec.amount)}** bol schválený a je na leaderboarde! 🏆` }),
+      }).catch(() => {});
+    }
+    return reply({
+      type: InteractionResponseType.UPDATE_MESSAGE,
+      data: { content: `✅ Approved by ${who} — ${rec.username}: ${usd(rec.amount)}`, embeds: [], components: [] },
+    });
+  }
 
-    rec.status = action === "approve" ? "approved" : "rejected";
+  // ---- Reject reason submitted (modal) ----
+  if (body.type === InteractionType.MODAL_SUBMIT) {
+    const [tag, id] = (body.data.custom_id || "").split(":");
+    if (tag !== "rejectmodal") return reply({ type: InteractionResponseType.PONG });
+    const roles = body.member?.roles || [];
+    const isStaff = STAFF_ROLE_IDS.length === 0 || roles.some((r) => STAFF_ROLE_IDS.includes(r));
+    if (!isStaff)
+      return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "Staff only." } });
+
+    const reason = body.data.components?.[0]?.components?.[0]?.value || "—";
+    const rec = await store.get(id, { type: "json" });
+    if (!rec)
+      return reply({ type: InteractionResponseType.UPDATE_MESSAGE, data: { content: "Submission not found.", embeds: [], components: [] } });
+    rec.status = "rejected";
+    rec.reason = reason;
     await store.setJSON(id, rec);
 
     const who = body.member?.user?.username || "staff";
-    const verb = rec.status === "approved" ? "✅ Approved" : "❌ Rejected";
+    if (BOT_TOKEN && rec.channelId) {
+      await fetch(`https://discord.com/api/v10/channels/${rec.channelId}/messages`, {
+        method: "POST", headers: { authorization: `Bot ${BOT_TOKEN}`, "content-type": "application/json" },
+        body: JSON.stringify({ content: `❌ <@${rec.userId}> tvoj výsledok **${usd(rec.amount)}** bol zamietnutý.\n**Dôvod:** ${reason}` }),
+      }).catch(() => {});
+    }
     return reply({
       type: InteractionResponseType.UPDATE_MESSAGE,
-      data: { content: `${verb} by ${who} — ${rec.username}: ${usd(rec.amount)}`, embeds: [], components: [] },
+      data: { content: `❌ Rejected by ${who} — ${rec.username}: ${usd(rec.amount)}\n**Reason:** ${reason}`, embeds: [], components: [] },
     });
   }
 
