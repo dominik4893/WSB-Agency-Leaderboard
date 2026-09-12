@@ -8,6 +8,7 @@ const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const APPROVALS_CHANNEL_ID = process.env.APPROVALS_CHANNEL_ID;
 const STAFF_ROLE_IDS = (process.env.STAFF_ROLE_IDS || "")
   .split(",").map((s) => s.trim()).filter(Boolean);
+const TICKETY_CATEGORY_ID = process.env.TICKETY_CATEGORY_ID;   // only allow /submit in tickets
 
 function subStore() {
   const siteID = process.env.BLOBS_SITE_ID, token = process.env.BLOBS_TOKEN;
@@ -40,6 +41,13 @@ export const handler = async (event) => {
 
   // ---- /submit ----
   if (body.type === InteractionType.APPLICATION_COMMAND && body.data?.name === "submit") {
+    // Only allow inside a ticket in the TICKETY category.
+    if (TICKETY_CATEGORY_ID && body.channel?.parent_id !== TICKETY_CATEGORY_ID) {
+      return reply({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: { flags: 64, content: "❌ `/submit` funguje len v tvojom tickete (kategória TICKETY). Otvor ticket a pošli výsledok tam." },
+      });
+    }
     const opts = Object.fromEntries((body.data.options || []).map((o) => [o.name, o.value]));
     const amount = Number(opts.amount) || 0;
     const metric = Number(opts.count) || 1;
@@ -79,9 +87,10 @@ export const handler = async (event) => {
       }).catch(() => {});
     }
 
+    // Visible confirmation in the ticket channel (not ephemeral).
     return reply({
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: { flags: 64, content: `✅ Submitted **${usd(amount)}**. Pending staff approval — you'll appear on the board once approved.` },
+      data: { content: `✅ <@${user.id}>, tvoj výsledok **${usd(amount)}** bol odoslaný a čaká na schválenie. Po schválení sa objavíš na leaderboarde. 🏆` },
     });
   }
 
