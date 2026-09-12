@@ -9,6 +9,13 @@ const APPROVALS_CHANNEL_ID = process.env.APPROVALS_CHANNEL_ID;
 const STAFF_ROLE_IDS = (process.env.STAFF_ROLE_IDS || "")
   .split(",").map((s) => s.trim()).filter(Boolean);
 
+function subStore() {
+  const siteID = process.env.BLOBS_SITE_ID, token = process.env.BLOBS_TOKEN;
+  return siteID && token
+    ? getStore({ name: "submissions", siteID, token })
+    : getStore("submissions");
+}
+
 const usd = (n) => "$" + Number(n || 0).toLocaleString("en-US");
 const reply = (obj, status = 200) => ({
   statusCode: status,
@@ -29,7 +36,7 @@ export const handler = async (event) => {
   if (body.type === InteractionType.PING)
     return reply({ type: InteractionResponseType.PONG });
 
-  const store = getStore("submissions");
+  const store = subStore();
 
   // ---- /submit ----
   if (body.type === InteractionType.APPLICATION_COMMAND && body.data?.name === "submit") {

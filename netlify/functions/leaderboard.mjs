@@ -2,9 +2,16 @@
 // The page fetches:  /api/leaderboard?period=today|week|month|lifetime
 import { getStore } from "@netlify/blobs";
 
+function subStore() {
+  const siteID = process.env.BLOBS_SITE_ID, token = process.env.BLOBS_TOKEN;
+  return siteID && token
+    ? getStore({ name: "submissions", siteID, token })
+    : getStore("submissions");
+}
+
 export const handler = async (event) => {
   const period = event.queryStringParameters?.period || "lifetime";
-  const store = getStore("submissions");
+  const store = subStore();
 
   const now = new Date();
   const inPeriod = (iso) => {
