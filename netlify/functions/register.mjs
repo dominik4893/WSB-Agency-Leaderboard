@@ -15,6 +15,13 @@ const COMMANDS = [
       { name: "count", description: "How many (sales/etc). Default 1.", type: 4, required: false },         // INTEGER
     ],
   },
+  {
+    name: "post",
+    description: "(staff) Send a message as the bot into a channel.",
+    options: [
+      { name: "channel", description: "Which channel to post in.", type: 7, required: true },   // CHANNEL
+    ],
+  },
 ];
 
 export const handler = async (event) => {

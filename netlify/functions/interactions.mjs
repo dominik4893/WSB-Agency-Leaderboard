@@ -116,6 +116,25 @@ export const handler = async (event) => {
     });
   }
 
+  // ---- /post (staff sends a message as the bot) ----
+  if (body.type === InteractionType.APPLICATION_COMMAND && body.data?.name === "post") {
+    const roles = body.member?.roles || [];
+    const isStaff = STAFF_ROLE_IDS.length === 0 || roles.some((r) => STAFF_ROLE_IDS.includes(r));
+    if (!isStaff)
+      return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "Staff only." } });
+    const opts = Object.fromEntries((body.data.options || []).map((o) => [o.name, o.value]));
+    return reply({
+      type: InteractionResponseType.MODAL,
+      data: {
+        custom_id: `postmodal:${opts.channel}`,
+        title: "Správa pre kanál",
+        components: [{ type: 1, components: [
+          { type: 4, custom_id: "content", label: "Text správy (markdown, do 4000 znakov)", style: 2, required: true, max_length: 4000 },
+        ]}],
+      },
+    });
+  }
+
   // ---- Approve / Reject buttons ----
   if (body.type === InteractionType.MESSAGE_COMPONENT) {
     const [action, id] = (body.data.custom_id || "").split(":");
@@ -157,14 +176,34 @@ export const handler = async (event) => {
     });
   }
 
-  // ---- Reject reason submitted (modal) ----
+  // ---- Modal submissions ----
   if (body.type === InteractionType.MODAL_SUBMIT) {
     const [tag, id] = (body.data.custom_id || "").split(":");
-    if (tag !== "rejectmodal") return reply({ type: InteractionResponseType.PONG });
     const roles = body.member?.roles || [];
     const isStaff = STAFF_ROLE_IDS.length === 0 || roles.some((r) => STAFF_ROLE_IDS.includes(r));
     if (!isStaff)
       return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "Staff only." } });
+
+    // /post -> send the pasted message as the bot into the chosen channel
+    if (tag === "postmodal") {
+      const content = body.data.components?.[0]?.components?.[0]?.value || "";
+      if (!BOT_TOKEN || !content.trim())
+        return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "❌ Prázdna správa alebo chýba token." } });
+      const res = await fetch(`https://discord.com/api/v10/channels/${id}/messages`, {
+        method: "POST",
+        headers: { authorization: `Bot ${BOT_TOKEN}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          embeds: [{ description: content, color: 0x8b5cf6 }],   // boxed embed like Discohook
+          allowed_mentions: { parse: ["users", "roles", "everyone"] },
+        }),
+      });
+      return reply({
+        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: { flags: 64, content: res.ok ? "✅ Správa odoslaná do kanála." : "❌ Nepodarilo sa odoslať — bot možno nemá prístup do toho kanála." },
+      });
+    }
+
+    if (tag !== "rejectmodal") return reply({ type: InteractionResponseType.PONG });
 
     const reason = body.data.components?.[0]?.components?.[0]?.value || "—";
     const rec = await store.get(id, { type: "json" });
