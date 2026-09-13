@@ -185,6 +185,8 @@ export const handler = async (event) => {
         body: JSON.stringify({ content: `✅ <@${rec.userId}> tvoj výsledok **${usd(rec.amount)}** bol schválený a je na leaderboarde! 🏆` }),
       }).catch(() => {});
     }
+    // auto-refresh the pinned leaderboard embed right after approval
+    try { await postOrUpdateLeaderboard(process.env.LB_PERIOD || "month"); } catch (e) { /* leaderboard update is best-effort */ }
     return reply({
       type: InteractionResponseType.UPDATE_MESSAGE,
       data: { content: `✅ Approved by ${who} — ${rec.username}: ${usd(rec.amount)}`, embeds: [], components: [] },
