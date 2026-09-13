@@ -2,6 +2,7 @@
 // Set the app's "Interactions Endpoint URL" to:  https://<your-site>/api/interactions
 import { verifyKey, InteractionType, InteractionResponseType } from "discord-interactions";
 import { getStore } from "@netlify/blobs";
+import { postOrUpdateLeaderboard } from "../lib/lb.mjs";
 
 const PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY;
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -132,6 +133,20 @@ export const handler = async (event) => {
           { type: 4, custom_id: "content", label: "Text správy (markdown, do 4000 znakov)", style: 2, required: true, max_length: 4000 },
         ]}],
       },
+    });
+  }
+
+  // ---- /updatelb (staff refresh the leaderboard embed) ----
+  if (body.type === InteractionType.APPLICATION_COMMAND && body.data?.name === "updatelb") {
+    const roles = body.member?.roles || [];
+    const isStaff = STAFF_ROLE_IDS.length === 0 || roles.some((r) => STAFF_ROLE_IDS.includes(r));
+    if (!isStaff)
+      return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "Staff only." } });
+    const opts = Object.fromEntries((body.data.options || []).map((o) => [o.name, o.value]));
+    const res = await postOrUpdateLeaderboard(opts.period || "month");
+    return reply({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: { flags: 64, content: res.ok ? "✅ Leaderboard aktualizovaný." : `❌ ${res.error}` },
     });
   }
 

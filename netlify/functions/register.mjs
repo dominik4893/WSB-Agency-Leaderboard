@@ -12,7 +12,7 @@ const COMMANDS = [
     options: [
       { name: "amount", description: "How much you earned, e.g. 40 or 40,00 or 1.234,56", type: 3, required: true },   // STRING (we parse it)
       { name: "proof", description: "Screenshot proof.", type: 11, required: true },                        // ATTACHMENT
-      { name: "count", description: "How many (sales/etc). Default 1.", type: 4, required: false },         // INTEGER
+      { name: "count", description: "Počet honičov (default 1).", type: 4, required: false },         // INTEGER
     ],
   },
   {
@@ -20,6 +20,19 @@ const COMMANDS = [
     description: "(staff) Send a message as the bot into a channel.",
     options: [
       { name: "channel", description: "Which channel to post in.", type: 7, required: true },   // CHANNEL
+    ],
+  },
+  {
+    name: "updatelb",
+    description: "(staff) Update the leaderboard embed.",
+    options: [
+      { name: "period", description: "Which period to show (default: this month).", type: 3, required: false,
+        choices: [
+          { name: "Today", value: "today" },
+          { name: "This Week", value: "week" },
+          { name: "This Month", value: "month" },
+          { name: "Lifetime", value: "lifetime" },
+        ] },
     ],
   },
 ];
