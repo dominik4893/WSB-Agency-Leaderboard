@@ -193,7 +193,11 @@ export const handler = async (event) => {
         method: "POST",
         headers: { authorization: `Bot ${BOT_TOKEN}`, "content-type": "application/json" },
         body: JSON.stringify({
-          embeds: [{ description: content, color: 0x8b5cf6 }],   // boxed embed like Discohook
+          embeds: [{
+            description: content,
+            color: 0x8b5cf6,
+            image: { url: "https://wsbagency-leaderboard.netlify.app/bar.png" },   // thin transparent bar -> forces equal full width
+          }],
           allowed_mentions: { parse: ["users", "roles", "everyone"] },
         }),
       });
