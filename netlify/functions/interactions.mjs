@@ -72,7 +72,7 @@ export const handler = async (event) => {
     }
     const opts = Object.fromEntries((body.data.options || []).map((o) => [o.name, o.value]));
     const amount = parseAmount(opts.amount);
-    const metric = Number(opts.count) || 1;
+    const metric = Number(opts.honici) || 1;
     const proofUrl = opts.proof ? body.data.resolved?.attachments?.[opts.proof]?.url : null;
     const user = body.member?.user || body.user;
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
