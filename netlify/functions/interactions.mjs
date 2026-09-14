@@ -72,7 +72,15 @@ export const handler = async (event) => {
     }
     const opts = Object.fromEntries((body.data.options || []).map((o) => [o.name, o.value]));
     const amount = parseAmount(opts.amount);
-    const metric = Number(opts.honici) || 1;
+    if (!(amount > 0)) {
+      return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: { flags: 64, content: "❌ Zadaj platnú **sumu** — číslo väčšie ako 0 (napr. `100` alebo `100,50`). Nie slová ani 0." } });
+    }
+    const metric = opts.honici == null ? 1 : Number(opts.honici);
+    if (!(metric >= 1)) {
+      return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: { flags: 64, content: "❌ Počet **honičov** musí byť číslo väčšie ako 0." } });
+    }
     const proofUrl = opts.proof ? body.data.resolved?.attachments?.[opts.proof]?.url : null;
     const user = body.member?.user || body.user;
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);

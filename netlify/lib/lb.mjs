@@ -34,7 +34,7 @@ export async function aggregate(period = "month") {
 }
 
 export function buildEmbed(list, period) {
-  const labels = { today: "Today", week: "This Week", month: "This Month", lifetime: "Lifetime" };
+  const titles = { today: "Daily Leaderboard", week: "Weekly Leaderboard", month: "Monthly Leaderboard", lifetime: "All-Time Leaderboard" };
   const medals = { 0: "🥇", 1: "🥈", 2: "🥉" };
   const top = list.slice(0, 10);
   const lines = top.length
@@ -44,12 +44,12 @@ export function buildEmbed(list, period) {
   const totalPremium = list.reduce((a, p) => a + p.amount, 0);
   const desc =
     lines +
-    "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+    "\n​\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
     "📊 **Agency Totals**\n" +
     `📄 Total honiči: **${totalDeals}**\n` +
     `💰 Total premium: **${usd(totalPremium)}**`;
   return {
-    title: `🏆 WSB Agency Leaderboard — ${labels[period] || period}`,
+    title: `🏆 ${titles[period] || "Leaderboard"}`,
     description: desc,
     color: 0x8b5cf6,
     image: { url: "https://wsbagency-leaderboard.netlify.app/bar.png" },

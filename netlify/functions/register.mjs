@@ -12,7 +12,7 @@ const COMMANDS = [
     options: [
       { name: "amount", description: "How much you earned, e.g. 40 or 40,00 or 1.234,56", type: 3, required: true },   // STRING (we parse it)
       { name: "proof", description: "Screenshot proof.", type: 11, required: true },                        // ATTACHMENT
-      { name: "honici", description: "Počet honičov (napr. 4).", type: 4, required: false },         // INTEGER
+      { name: "honici", description: "Počet honičov (napr. 4).", type: 4, required: false, min_value: 1 },         // INTEGER (min 1)
     ],
   },
   {
