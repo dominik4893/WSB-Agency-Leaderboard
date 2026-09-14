@@ -70,7 +70,7 @@ export async function postOrUpdateLeaderboard(period = "month") {
   let ref = null;
   try { ref = await meta.get("lb_message", { type: "json" }); } catch (e) { /* none yet */ }
 
-  // Try to edit the existing message in place.
+  // Edit the existing message in place.
   if (ref?.channelId && ref?.messageId) {
     const r = await fetch(`https://discord.com/api/v10/channels/${ref.channelId}/messages/${ref.messageId}`, {
       method: "PATCH", headers: auth, body: JSON.stringify({ embeds: [embed] }),

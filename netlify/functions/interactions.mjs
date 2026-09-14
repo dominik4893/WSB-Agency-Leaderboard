@@ -248,12 +248,18 @@ export const handler = async (event) => {
         if (!fr.ok)
           return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "❌ Nepodarilo sa načítať súbor." } });
         const bytes = new Uint8Array(await fr.arrayBuffer());
+        // 1) the embed (text box) on top
+        const r1 = await fetch(url, {
+          method: "POST", headers: { authorization: `Bot ${BOT_TOKEN}`, "content-type": "application/json" },
+          body: JSON.stringify({ embeds: [embed], allowed_mentions: mentions }),
+        });
+        // 2) the file right below, as its own message
         const form = new FormData();
-        form.append("payload_json", JSON.stringify({ embeds: [embed], allowed_mentions: mentions }));
+        form.append("payload_json", JSON.stringify({ allowed_mentions: { parse: [] } }));
         form.append("files[0]", new Blob([bytes]), info.filename || "file");
-        const r = await fetch(url, { method: "POST", headers: { authorization: `Bot ${BOT_TOKEN}` }, body: form });
+        const r2 = await fetch(url, { method: "POST", headers: { authorization: `Bot ${BOT_TOKEN}` }, body: form });
         return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: { flags: 64, content: r.ok ? "✅ Správa a súbor odoslané do kanála." : "❌ Odoslanie zlyhalo — bot možno nemá prístup do kanála, alebo je súbor priveľký." } });
+          data: { flags: 64, content: (r1.ok && r2.ok) ? "✅ Embed a súbor odoslané do kanála." : "❌ Odoslanie zlyhalo — bot možno nemá prístup do kanála, alebo je súbor priveľký." } });
       }
 
       // No file: plain embed.
