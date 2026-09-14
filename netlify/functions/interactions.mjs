@@ -17,6 +17,12 @@ function subStore() {
     ? getStore({ name: "submissions", siteID, token })
     : getStore("submissions");
 }
+function postFilesStore() {
+  const siteID = process.env.BLOBS_SITE_ID, token = process.env.BLOBS_TOKEN;
+  return siteID && token
+    ? getStore({ name: "postfiles", siteID, token })
+    : getStore("postfiles");
+}
 
 const usd = (n) => "$" + Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
 
@@ -132,10 +138,19 @@ export const handler = async (event) => {
     if (!isStaff)
       return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "Staff only." } });
     const opts = Object.fromEntries((body.data.options || []).map((o) => [o.name, o.value]));
+    // if a file is attached, stash its URL so we can send it after the modal
+    let fileKey = "";
+    if (opts.file) {
+      const att = body.data.resolved?.attachments?.[opts.file];
+      if (att?.url) {
+        fileKey = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        await postFilesStore().setJSON(fileKey, { url: att.url, filename: att.filename || "file" }).catch(() => {});
+      }
+    }
     return reply({
       type: InteractionResponseType.MODAL,
       data: {
-        custom_id: `postmodal:${opts.channel}`,
+        custom_id: `postmodal:${opts.channel}:${fileKey}`,
         title: "Správa pre kanál",
         components: [{ type: 1, components: [
           { type: 4, custom_id: "content", label: "Text správy (markdown, do 4000 znakov)", style: 2, required: true, max_length: 4000 },
@@ -203,28 +218,49 @@ export const handler = async (event) => {
 
   // ---- Modal submissions ----
   if (body.type === InteractionType.MODAL_SUBMIT) {
-    const [tag, id] = (body.data.custom_id || "").split(":");
+    const [tag, id, fileKey] = (body.data.custom_id || "").split(":");
     const roles = body.member?.roles || [];
     const isStaff = STAFF_ROLE_IDS.length === 0 || roles.some((r) => STAFF_ROLE_IDS.includes(r));
     if (!isStaff)
       return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "Staff only." } });
 
-    // /post -> send the pasted message as the bot into the chosen channel
+    // /post -> send the pasted message (and optional file) as the bot into the chosen channel
     if (tag === "postmodal") {
       const content = body.data.components?.[0]?.components?.[0]?.value || "";
       if (!BOT_TOKEN || !content.trim())
         return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "❌ Prázdna správa alebo chýba token." } });
-      const res = await fetch(`https://discord.com/api/v10/channels/${id}/messages`, {
+
+      const embed = {
+        description: content,
+        color: 0x8b5cf6,
+        image: { url: "https://wsbagency-leaderboard.netlify.app/bar.png" },
+      };
+      const url = `https://discord.com/api/v10/channels/${id}/messages`;
+      const mentions = { parse: ["users", "roles", "everyone"] };
+
+      // With an attached file: download it and re-upload as multipart.
+      if (fileKey) {
+        const info = await postFilesStore().get(fileKey, { type: "json" }).catch(() => null);
+        await postFilesStore().delete(fileKey).catch(() => {});
+        if (!info?.url)
+          return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "❌ Súbor sa nenašiel, skús znova." } });
+        const fr = await fetch(info.url);
+        if (!fr.ok)
+          return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "❌ Nepodarilo sa načítať súbor." } });
+        const bytes = new Uint8Array(await fr.arrayBuffer());
+        const form = new FormData();
+        form.append("payload_json", JSON.stringify({ embeds: [embed], allowed_mentions: mentions }));
+        form.append("files[0]", new Blob([bytes]), info.filename || "file");
+        const r = await fetch(url, { method: "POST", headers: { authorization: `Bot ${BOT_TOKEN}` }, body: form });
+        return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: { flags: 64, content: r.ok ? "✅ Správa a súbor odoslané do kanála." : "❌ Odoslanie zlyhalo — bot možno nemá prístup do kanála, alebo je súbor priveľký." } });
+      }
+
+      // No file: plain embed.
+      const res = await fetch(url, {
         method: "POST",
         headers: { authorization: `Bot ${BOT_TOKEN}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          embeds: [{
-            description: content,
-            color: 0x8b5cf6,
-            image: { url: "https://wsbagency-leaderboard.netlify.app/bar.png" },   // thin transparent bar -> forces equal full width
-          }],
-          allowed_mentions: { parse: ["users", "roles", "everyone"] },
-        }),
+        body: JSON.stringify({ embeds: [embed], allowed_mentions: mentions }),
       });
       return reply({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,

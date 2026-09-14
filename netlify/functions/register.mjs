@@ -20,6 +20,7 @@ const COMMANDS = [
     description: "(staff) Send a message as the bot into a channel.",
     options: [
       { name: "channel", description: "Which channel to post in.", type: 7, required: true },   // CHANNEL
+      { name: "file", description: "Voliteľný súbor na priloženie (napr. .zip).", type: 11, required: false },   // ATTACHMENT
     ],
   },
   {
