@@ -28,6 +28,16 @@ const COMMANDS = [
     ],
   },
   {
+    name: "repost",
+    description: "(staff) Copy a message (or a range) with files into another channel — looks identical.",
+    options: [
+      { name: "message", description: "Odkaz na správu, alebo PRVÚ správu rozsahu (Copy Message Link) / ID.", type: 3, required: true },   // STRING (start)
+      { name: "channel", description: "Kam to preposlať.", type: 7, required: true },   // CHANNEL (target)
+      { name: "until",   description: "Odkaz na POSLEDNÚ správu rozsahu — ak chceš preposlať viac správ naraz.", type: 3, required: false },   // STRING (end)
+      { name: "source",  description: "Kanál pôvodných správ (vyplň len ak dávaš samotné ID).", type: 7, required: false },   // CHANNEL (source)
+    ],
+  },
+  {
     name: "updatelb",
     description: "(staff) Update the leaderboard embed.",
     options: [

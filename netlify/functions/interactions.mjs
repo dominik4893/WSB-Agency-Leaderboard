@@ -46,6 +46,16 @@ function parseAmount(input) {
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : 0;
 }
+// Parse a Discord message link or bare ID into { channelId, messageId }.
+//   https://discord.com/channels/<guild>/<channel>/<message>  -> from link
+//   "123456789012345678"                                      -> id, use fallback channel
+function parseMsgRef(input, fallbackChannel) {
+  const s = String(input || "").trim();
+  const m = s.match(/channels\/(\d+)\/(\d+)\/(\d+)/);
+  if (m) return { channelId: m[2], messageId: m[3] };
+  if (/^\d{5,}$/.test(s)) return { channelId: fallbackChannel, messageId: s };
+  return null;
+}
 const reply = (obj, status = 200) => ({
   statusCode: status,
   headers: { "content-type": "application/json" },
@@ -163,6 +173,44 @@ export const handler = async (event) => {
         ]}],
       },
     });
+  }
+
+  // ---- /repost (staff copy a whole message into another channel) ----
+  if (body.type === InteractionType.APPLICATION_COMMAND && body.data?.name === "repost") {
+    const roles = body.member?.roles || [];
+    const isStaff = STAFF_ROLE_IDS.length === 0 || roles.some((r) => STAFF_ROLE_IDS.includes(r));
+    if (!isStaff)
+      return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "Staff only." } });
+
+    const opts = Object.fromEntries((body.data.options || []).map((o) => [o.name, o.value]));
+    const ref = parseMsgRef(opts.message, opts.source || body.channel_id);
+    if (!ref)
+      return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        data: { flags: 64, content: "❌ Neplatný odkaz/ID správy. Klikni pravým na správu → **Copy Message Link** a vlož to." } });
+
+    // Optional end-of-range message. Must live in the same source channel as the start.
+    let endId = null;
+    if (opts.until) {
+      const endRef = parseMsgRef(opts.until, ref.channelId);
+      if (!endRef || endRef.channelId !== ref.channelId)
+        return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: { flags: 64, content: "❌ `until` musí byť správa z **rovnakého kanála** ako prvá správa." } });
+      endId = endRef.messageId;
+    }
+
+    // Kick off the heavy copy in a background function (re-uploading files can take >3s).
+    const base = process.env.URL || "https://wsbagency-leaderboard.netlify.app";
+    fetch(`${base}/.netlify/functions/repost-background`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        srcCh: ref.channelId, msgId: ref.messageId, endId, targetCh: opts.channel,
+        appId: body.application_id, token: body.token,
+      }),
+    }).catch(() => {});
+
+    // Deferred ephemeral ack — the background function edits this with the result.
+    return reply({ type: InteractionResponseType.DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64 } });
   }
 
   // ---- /updatelb (staff refresh the leaderboard embed) ----
