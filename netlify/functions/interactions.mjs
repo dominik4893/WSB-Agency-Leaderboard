@@ -138,14 +138,19 @@ export const handler = async (event) => {
     if (!isStaff)
       return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "Staff only." } });
     const opts = Object.fromEntries((body.data.options || []).map((o) => [o.name, o.value]));
-    // if a file is attached, stash its URL so we can send it after the modal
-    let fileKey = "";
-    if (opts.file) {
-      const att = body.data.resolved?.attachments?.[opts.file];
-      if (att?.url) {
-        fileKey = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-        await postFilesStore().setJSON(fileKey, { url: att.url, filename: att.filename || "file" }).catch(() => {});
+    // collect every attached file (file, file2..file5) and stash them for after the modal
+    const atts = body.data.resolved?.attachments || {};
+    const files = [];
+    for (const o of (body.data.options || [])) {
+      if (/^file\d*$/.test(o.name)) {
+        const att = atts[o.value];
+        if (att?.url) files.push({ url: att.url, filename: att.filename || "file" });
       }
+    }
+    let fileKey = "";
+    if (files.length) {
+      fileKey = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      await postFilesStore().setJSON(fileKey, { files }).catch(() => {});
     }
     return reply({
       type: InteractionResponseType.MODAL,
@@ -153,7 +158,8 @@ export const handler = async (event) => {
         custom_id: `postmodal:${opts.channel}:${fileKey}`,
         title: "Správa pre kanál",
         components: [{ type: 1, components: [
-          { type: 4, custom_id: "content", label: "Text správy (markdown, do 4000 znakov)", style: 2, required: true, max_length: 4000 },
+          // optional: leave blank to send only the file(s)
+          { type: 4, custom_id: "content", label: "Text (prázdne = len súbor)", style: 2, required: false, max_length: 4000 },
         ]}],
       },
     });
@@ -227,50 +233,66 @@ export const handler = async (event) => {
     // /post -> send the pasted message (and optional file) as the bot into the chosen channel
     if (tag === "postmodal") {
       const content = body.data.components?.[0]?.components?.[0]?.value || "";
-      if (!BOT_TOKEN || !content.trim())
-        return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "❌ Prázdna správa alebo chýba token." } });
+      if (!BOT_TOKEN)
+        return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "❌ Chýba token." } });
 
-      const embed = {
-        description: content,
-        color: 0x8b5cf6,
-        image: { url: "https://wsbagency-leaderboard.netlify.app/bar.png" },
-      };
-      const url = `https://discord.com/api/v10/channels/${id}/messages`;
-      const mentions = { parse: ["users", "roles", "everyone"] };
-
-      // With an attached file: download it and re-upload as multipart.
+      // load any stashed files (supports both new {files:[...]} and old {url,filename})
+      let files = [];
       if (fileKey) {
         const info = await postFilesStore().get(fileKey, { type: "json" }).catch(() => null);
         await postFilesStore().delete(fileKey).catch(() => {});
-        if (!info?.url)
-          return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "❌ Súbor sa nenašiel, skús znova." } });
-        const fr = await fetch(info.url);
-        if (!fr.ok)
-          return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "❌ Nepodarilo sa načítať súbor." } });
-        const bytes = new Uint8Array(await fr.arrayBuffer());
-        // 1) the embed (text box) on top
+        files = Array.isArray(info?.files) ? info.files
+              : (info?.url ? [{ url: info.url, filename: info.filename || "file" }] : []);
+      }
+
+      if (!content.trim() && !files.length)
+        return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE, data: { flags: 64, content: "❌ Nič na odoslanie — napíš text alebo priloz súbor." } });
+
+      const url = `https://discord.com/api/v10/channels/${id}/messages`;
+      const mentions = { parse: ["users", "roles", "everyone"] };
+
+      // 1) text embed on top — only if there is text
+      let r1ok = true;
+      if (content.trim()) {
+        const embed = {
+          description: content,
+          color: 0x8b5cf6,
+          image: { url: "https://wsbagency-leaderboard.netlify.app/bar.png" },
+        };
         const r1 = await fetch(url, {
           method: "POST", headers: { authorization: `Bot ${BOT_TOKEN}`, "content-type": "application/json" },
           body: JSON.stringify({ embeds: [embed], allowed_mentions: mentions }),
         });
-        // 2) the file right below, as its own message
-        const form = new FormData();
-        form.append("payload_json", JSON.stringify({ allowed_mentions: { parse: [] } }));
-        form.append("files[0]", new Blob([bytes]), info.filename || "file");
-        const r2 = await fetch(url, { method: "POST", headers: { authorization: `Bot ${BOT_TOKEN}` }, body: form });
-        return reply({ type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: { flags: 64, content: (r1.ok && r2.ok) ? "✅ Embed a súbor odoslané do kanála." : "❌ Odoslanie zlyhalo — bot možno nemá prístup do kanála, alebo je súbor priveľký." } });
+        r1ok = r1.ok;
       }
 
-      // No file: plain embed.
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { authorization: `Bot ${BOT_TOKEN}`, "content-type": "application/json" },
-        body: JSON.stringify({ embeds: [embed], allowed_mentions: mentions }),
-      });
+      // 2) all files together, in one message below (Discord allows up to 10)
+      let r2ok = true;
+      if (files.length) {
+        const form = new FormData();
+        form.append("payload_json", JSON.stringify({ allowed_mentions: { parse: [] } }));
+        let idx = 0;
+        for (const f of files.slice(0, 10)) {
+          const fr = await fetch(f.url);
+          if (!fr.ok) continue;
+          const bytes = new Uint8Array(await fr.arrayBuffer());
+          form.append(`files[${idx}]`, new Blob([bytes]), f.filename || `file${idx}`);
+          idx++;
+        }
+        if (idx === 0) r2ok = false;
+        else {
+          const r2 = await fetch(url, { method: "POST", headers: { authorization: `Bot ${BOT_TOKEN}` }, body: form });
+          r2ok = r2.ok;
+        }
+      }
+
+      const ok = r1ok && r2ok;
+      const okMsg = (content.trim() && files.length) ? "✅ Text a súbory odoslané do kanála."
+                  : files.length ? "✅ Súbor(y) odoslané do kanála."
+                  : "✅ Správa odoslaná do kanála.";
       return reply({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        data: { flags: 64, content: res.ok ? "✅ Správa odoslaná do kanála." : "❌ Nepodarilo sa odoslať — bot možno nemá prístup do toho kanála." },
+        data: { flags: 64, content: ok ? okMsg : "❌ Odoslanie zlyhalo — bot možno nemá prístup do kanála, alebo je súbor priveľký." },
       });
     }
 

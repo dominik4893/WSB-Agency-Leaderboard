@@ -17,10 +17,14 @@ const COMMANDS = [
   },
   {
     name: "post",
-    description: "(staff) Send a message as the bot into a channel.",
+    description: "(staff) Send a message and/or files as the bot into a channel.",
     options: [
       { name: "channel", description: "Which channel to post in.", type: 7, required: true },   // CHANNEL
-      { name: "file", description: "Voliteľný súbor na priloženie (napr. .zip).", type: 11, required: false },   // ATTACHMENT
+      { name: "file",  description: "Súbor na priloženie (napr. .zip). Voliteľné.", type: 11, required: false },   // ATTACHMENT
+      { name: "file2", description: "Ďalší súbor (voliteľné).", type: 11, required: false },   // ATTACHMENT
+      { name: "file3", description: "Ďalší súbor (voliteľné).", type: 11, required: false },   // ATTACHMENT
+      { name: "file4", description: "Ďalší súbor (voliteľné).", type: 11, required: false },   // ATTACHMENT
+      { name: "file5", description: "Ďalší súbor (voliteľné).", type: 11, required: false },   // ATTACHMENT
     ],
   },
   {
